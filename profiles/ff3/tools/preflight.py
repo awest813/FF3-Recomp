@@ -9,6 +9,15 @@ PROFILE = Path(__file__).resolve().parents[1]
 FIXED_FONT_SHA256 = '81048dac1956f98a51ec20798e1bdc28271caa703d23c68f90c8ac3c3373f2c7'
 
 
+def host_is_executable(host):
+    if os.name == 'nt':
+        # Windows reports every existing file as executable. A player launch
+        # needs a PE image with an .exe suffix; the setup tests rely on that.
+        with host.open('rb') as stream:
+            return host.suffix.lower() == '.exe' and stream.read(2) == b'MZ'
+    return os.access(host, os.X_OK)
+
+
 def check_runtime(elf, iso, host):
     errors = []
     config = json.loads((PROFILE / 'config/npuh10125.json').read_text())
@@ -34,6 +43,6 @@ def check_runtime(elf, iso, host):
         errors.append('Raw ISO unavailable: ' + str(error))
     if not host.is_file():
         errors.append('Native player missing: ' + str(host))
-    elif not os.access(host, os.X_OK):
+    elif not host_is_executable(host):
         errors.append('Native player is not executable; rebuild it: ' + str(host))
     return errors
