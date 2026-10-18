@@ -1,0 +1,6 @@
+#pragma once
+#include <cstdint>
+namespace ff3 {
+inline constexpr char input_sha256[] = "@FF3_CORPUS_SHA256@";
+inline constexpr std::uint32_t load_base = @FF3_CORPUS_BASE@u;
+}

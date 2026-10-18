@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "title": "Final Fantasy III (PSP)",
+  "disc_id": null,
+  "expected_sha256": null,
+  "load_base": "0x08804000",
+  "unit_span_bytes": "0x00020000"
+}

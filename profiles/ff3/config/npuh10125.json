@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "title": "Final Fantasy III (PSP)",
+  "disc_id": "NPUH10125",
+  "expected_sha256": "baf63a2c51de4f174dc7ab3d9c72329c58bff4d51970154bd533c62ee1965b46",
+  "expected_size_bytes": 2588681,
+  "load_base": "0x08804000",
+  "unit_span_bytes": "0x00004000"
+}

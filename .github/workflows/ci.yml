@@ -1,0 +1,32 @@
+name: Source checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        profile: [framework, ff3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit published files
+        run: python3 tools/check_repository.py
+      - name: Configure
+        shell: bash
+        run: |
+          profile="${{ matrix.profile }}"
+          if [ "$profile" = framework ]; then profile=""; fi
+          cmake -S . -B out/ci -DCMAKE_BUILD_TYPE=Release -DPSPRECOMP_PROFILE="$profile" -DFF3_BUILD_GENERATED=OFF
+      - name: Build
+        run: cmake --build out/ci --parallel 2
+      - name: Test
+        run: ctest --test-dir out/ci --output-on-failure
