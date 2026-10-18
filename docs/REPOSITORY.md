@@ -14,6 +14,8 @@ building a game player. The VCS player also requires its Windows dependencies.
 
 CI on Linux and macOS builds the framework and FF3 asset-free tooling/tests.
 It does not build the commercial-game corpus or claim gameplay validation.
+Windows CI and a corpus-free VCS tools build are sequenced in
+[the Windows and Linux build plan](WINDOWS_LINUX_BUILDS.md).
 FF3 player preparation is documented in [the profile README](../profiles/ff3/README.md).
 
 Before the first commit or a push:

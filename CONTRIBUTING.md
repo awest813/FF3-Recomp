@@ -4,6 +4,11 @@ Keep reusable Allegrex/runtime changes in the framework and title-specific
 behavior in the relevant profile. Preserve existing license and attribution
 notices; see [source provenance](docs/SOURCE_PROVENANCE.md).
 
+The asset-free check below is what Linux and macOS continuous integration runs.
+Windows coverage and a VCS tools build that configures without the local
+generated corpus are sequenced in
+[the Windows and Linux build plan](docs/WINDOWS_LINUX_BUILDS.md).
+
 Build and test changes without commercial inputs first:
 
 ```sh

@@ -1,6 +1,8 @@
 # VCS profile
 
-This profile builds `VCSNative.exe` for the supported GTA: Vice City Stories PSP executable. It contains HLE/profile code, DX12 renderer integration, audio/input support and configuration. The title-specific generated AOT corpus stays local and is excluded from this source-only repository. A fresh clone does not include a ready-to-build VCS player.
+This profile builds `VCSNative.exe` for the supported GTA: Vice City Stories PSP executable. It contains HLE/profile code, DX12 renderer integration, audio/input support and configuration. The title-specific generated AOT corpus stays local and is excluded from this source-only repository.
+
+A fresh clone has no ready-to-build player. Configuring the profile currently stops when `generated/generated_unit_0043.cpp` is absent. The [Windows and Linux build plan](../../docs/WINDOWS_LINUX_BUILDS.md) covers building the tools without that corpus.
 
 ## Quick build on Windows
 
