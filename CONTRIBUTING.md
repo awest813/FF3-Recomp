@@ -4,6 +4,14 @@ Keep reusable Allegrex/runtime changes in the framework and title-specific
 behavior in the relevant profile. Preserve existing license and attribution
 notices; see [source provenance](docs/SOURCE_PROVENANCE.md).
 
+The asset-free check below matches continuous integration on Linux, macOS, and
+Windows. It includes the FF3 software host tests. The same hosts also build
+the Vice City Stories tools without the local generated corpus
+(`-DPSPRECOMP_PROFILE=vcs`). The remaining player work is in
+[the Windows and Linux build plan](docs/WINDOWS_LINUX_BUILDS.md).
+Windows and Linux FF3 probe instructions are in
+[profiles/ff3/WINDOWS_LINUX.md](profiles/ff3/WINDOWS_LINUX.md).
+
 Build and test changes without commercial inputs first:
 
 ```sh
@@ -12,10 +20,10 @@ cmake --build out/check --parallel 2
 ctest --test-dir out/check --output-on-failure
 ```
 
-This covers framework, bootstrap, synthetic instruction, tooling and ISO/setup
-tests.
-Native FF3 host/media tests additionally require the local generated build and
-FFmpeg. Do not describe a passing synthetic test as proof of full-game behavior.
+This covers framework, bootstrap, synthetic instruction, tooling, ISO/setup,
+and software host tests. Movie checks that decode game video additionally
+require the local generated build and FFmpeg. Do not describe a passing
+synthetic test as proof of full-game behavior.
 
 For bug reports, include OS/architecture, compiler, profile, commit, reproduction
 steps, and expected versus actual behavior. For game-specific bugs, provide the

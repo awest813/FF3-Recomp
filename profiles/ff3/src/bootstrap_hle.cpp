@@ -1,4 +1,5 @@
 #include "bootstrap_hle.hpp"
+#include "host_system.hpp"
 #include <chrono>
 #include <ctime>
 #include "guest_printf.hpp"
@@ -230,7 +231,7 @@ void BootstrapHle::install(psprecomp::Runtime &runtime) {
     });
     runtime.register_hle("sceRtc",0xE7C27D1Bu,[](auto &rt,auto &ctx){
         const auto p=ctx.gpr[4];if(!rt.memory().contains(p,16)){rt.stop("Invalid RTC output");return;}
-        const auto now=std::chrono::system_clock::now();const auto time=std::chrono::system_clock::to_time_t(now);std::tm date{};localtime_r(&time,&date);
+        const auto now=std::chrono::system_clock::now();const auto time=std::chrono::system_clock::to_time_t(now);std::tm date{};local_calendar_time(time,date);
         for (const auto [offset,value]:{std::pair{0,1900+date.tm_year},{2,1+date.tm_mon},{4,date.tm_mday},{6,date.tm_hour},{8,date.tm_min},{10,date.tm_sec}})rt.memory().store16(p+offset,value);
         rt.memory().store32(p+12,std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count()%1000000);ctx.set_gpr(2,0);
     });

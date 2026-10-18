@@ -34,30 +34,41 @@ if(NOT PSPRECOMP_HOT_GENERATED_INLINE_LEVEL MATCHES "^[0-3]$")
 endif()
 
 file(GLOB VCS_GENERATED CONFIGURE_DEPENDS "${VCS_PROFILE_DIR}/generated/*.cpp")
-if(MSVC)
-    if(PSPRECOMP_GENERATED_OPT_LEVEL STREQUAL "0")
-        set(VCS_GENERATED_MSVC_OPT "/Od")
-    elseif(PSPRECOMP_GENERATED_OPT_LEVEL STREQUAL "3")
-        set(VCS_GENERATED_MSVC_OPT "/Ox")
-    else()
-        set(VCS_GENERATED_MSVC_OPT "/O${PSPRECOMP_GENERATED_OPT_LEVEL}")
-    endif()
-    set(VCS_GENERATED_MSVC_OPTIONS
-        "${VCS_GENERATED_MSVC_OPT};/Ob${PSPRECOMP_GENERATED_INLINE_LEVEL};/bigobj;${PSPRECOMP_MSVC_MP_FLAG}")
-    if(PSPRECOMP_LTO AND NOT PSPRECOMP_VCS_AOT_LTO)
-        # CMAKE_INTERPROCEDURAL_OPTIMIZATION adds /GL at target scope.  /GL- on
-        # these sources overrides it so the linker receives native .obj code
-        # instead of 234 giant LTCG IR modules.
-        string(APPEND VCS_GENERATED_MSVC_OPTIONS ";/GL-")
-    endif()
-    set_source_files_properties(${VCS_GENERATED} PROPERTIES COMPILE_OPTIONS
-        "${VCS_GENERATED_MSVC_OPTIONS}")
+# A fresh clone has no translated corpus. Tools and CPU tests still configure;
+# the player is added only when generated/*.cpp is present. A partial corpus
+# still fails below when a required hot or AVX-fallback unit is missing.
+if(VCS_GENERATED)
+    set(VCS_HAVE_CORPUS TRUE)
 else()
-    set_source_files_properties(${VCS_GENERATED} PROPERTIES COMPILE_OPTIONS
-        "-O${PSPRECOMP_GENERATED_OPT_LEVEL};-g0")
+    set(VCS_HAVE_CORPUS FALSE)
+    message(STATUS "VCS generated corpus is absent; building vcs_recomp and CPU tests only")
+endif()
+if(VCS_HAVE_CORPUS)
+    if(MSVC)
+        if(PSPRECOMP_GENERATED_OPT_LEVEL STREQUAL "0")
+            set(VCS_GENERATED_MSVC_OPT "/Od")
+        elseif(PSPRECOMP_GENERATED_OPT_LEVEL STREQUAL "3")
+            set(VCS_GENERATED_MSVC_OPT "/Ox")
+        else()
+            set(VCS_GENERATED_MSVC_OPT "/O${PSPRECOMP_GENERATED_OPT_LEVEL}")
+        endif()
+        set(VCS_GENERATED_MSVC_OPTIONS
+            "${VCS_GENERATED_MSVC_OPT};/Ob${PSPRECOMP_GENERATED_INLINE_LEVEL};/bigobj;${PSPRECOMP_MSVC_MP_FLAG}")
+        if(PSPRECOMP_LTO AND NOT PSPRECOMP_VCS_AOT_LTO)
+            # CMAKE_INTERPROCEDURAL_OPTIMIZATION adds /GL at target scope.  /GL- on
+            # these sources overrides it so the linker receives native .obj code
+            # instead of 234 giant LTCG IR modules.
+            string(APPEND VCS_GENERATED_MSVC_OPTIONS ";/GL-")
+        endif()
+        set_source_files_properties(${VCS_GENERATED} PROPERTIES COMPILE_OPTIONS
+            "${VCS_GENERATED_MSVC_OPTIONS}")
+    else()
+        set_source_files_properties(${VCS_GENERATED} PROPERTIES COMPILE_OPTIONS
+            "-O${PSPRECOMP_GENERATED_OPT_LEVEL};-g0")
+    endif()
 endif()
 
-if(PSPRECOMP_PROFILE_GUIDED_AOT)
+if(VCS_HAVE_CORPUS AND PSPRECOMP_PROFILE_GUIDED_AOT)
     # This unit is hot in the current capture and finishes /Ob3 without
     # triggering MSVC's pathological optimizer growth. It also contains the
     # validated native collision leaf at guest PC 0x088B1554. Other measured
@@ -93,7 +104,7 @@ if(PSPRECOMP_PROFILE_GUIDED_AOT)
     endif()
 endif()
 
-if(MSVC AND PSPRECOMP_NATIVE_AVX2)
+if(VCS_HAVE_CORPUS AND MSVC AND PSPRECOMP_NATIVE_AVX2)
     # MSVC 19.44's AVX2 optimizer crashes (C1001/c2.dll) on this translation
     # unit, while the identical /Ox /Ob0 compile completes in ~3 s with AVX.
     # Keep AVX2 for the host and the other AOT units; append the weaker ISA only
@@ -177,6 +188,7 @@ function(vcs_set_runtime_output target)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 endfunction()
 
+if(VCS_HAVE_CORPUS)
 set(VCS_APP_RESOURCES)
 if(WIN32)
     list(APPEND VCS_APP_RESOURCES resources/VCSNative.rc)
@@ -236,6 +248,7 @@ add_custom_command(TARGET VCSNative POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${VCS_PROFILE_DIR}/third_party/cloudworks/ATTRIBUTION.md"
         "$<TARGET_FILE_DIR:VCSNative>/CLOUDWORKS_ATTRIBUTION.md")
+endif()
 
 # Profile-specific generator. The root psp_recomp target stays game-neutral.
 add_executable(vcs_recomp tools/vcs_codegen_main.cpp)
@@ -246,10 +259,12 @@ if(PSPRECOMP_BUILD_PROFILE_TESTS)
     if(NOT PSPRECOMP_BUILD_TESTS)
         enable_testing()
     endif()
-    add_executable(vcs_profile_tests tests/vcs_profile_tests.cpp ${VCS_HOST_SOURCES})
-    vcs_target_common(vcs_profile_tests)
-    vcs_set_runtime_output(vcs_profile_tests)
-    add_test(NAME vcs_profile_tests COMMAND vcs_profile_tests)
+    if(VCS_HAVE_CORPUS)
+        add_executable(vcs_profile_tests tests/vcs_profile_tests.cpp ${VCS_HOST_SOURCES})
+        vcs_target_common(vcs_profile_tests)
+        vcs_set_runtime_output(vcs_profile_tests)
+        add_test(NAME vcs_profile_tests COMMAND vcs_profile_tests)
+    endif()
 
     add_executable(vcs_config_tests
         tests/vcs_config_tests.cpp
