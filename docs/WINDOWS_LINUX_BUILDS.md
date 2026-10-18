@@ -8,25 +8,19 @@ macOS FF3 play is outside this plan. That player already has its own [status](..
 
 The FF3 software host (`ff3_host`) and `ff3_host_tests` are part of the asset-free profile build. Continuous integration runs that build, and the framework build, on Linux, macOS, and Windows. Windows uses the Visual Studio 2022 toolset with Ninja. `ff3_probe` is the headless diagnostic for Windows and Linux once a local corpus and a matching FFmpeg 7 install exist. The commands are in [profiles/ff3/WINDOWS_LINUX.md](../profiles/ff3/WINDOWS_LINUX.md). `FF3_BUILD_WINDOW=ON` still selects the macOS AppKit player and stops configuration on the other hosts.
 
-Still open: the VCS corpus gate (phase 2), a headless Linux `VCSNative` (phase 3), a Linux VCS window (phase 4), and an interactive FF3 window on Windows and Linux (the remainder of phase 5).
+The Vice City Stories tools configure without `profiles/vcs/generated/`. Continuous integration builds `vcs_recomp` and the CPU-only tests on Linux, macOS, and Windows. `VCSNative` is added only when that corpus is present.
+
+Still open: a headless Linux `VCSNative` (phase 3), a Linux VCS window (phase 4), and an interactive FF3 window on Windows and Linux (the remainder of phase 5).
 
 ## Current map
 
-Continuous integration (`.github/workflows/ci.yml`) runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Each host builds two configurations: the framework (`PSPRECOMP_PROFILE=""`) and FF3 with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`. Linux and macOS use the platform's default single-configuration generator. Windows uses Ninja after the Visual Studio x64 environment is loaded, so `CMAKE_BUILD_TYPE` means the same thing on every host. `ctest` runs without `-C`.
+Continuous integration (`.github/workflows/ci.yml`) runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Each host builds three configurations: the framework (`PSPRECOMP_PROFILE=""`), FF3 with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`, and VCS with no generated corpus. Linux and macOS use the platform's default single-configuration generator. Windows uses Ninja after the Visual Studio x64 environment is loaded, so `CMAKE_BUILD_TYPE` means the same thing on every host. `ctest` runs without `-C`.
 
 Checked on Linux with GCC 13.3, from a clean tree:
 
 - The framework command in the README configures, builds, and passes `psprecomp_tests` and `stripped_prx_tests`.
-- The FF3 asset-free command configures, builds, and passes those two tests plus `ff3_bootstrap_tests`, `ff3_tooling_tests`, `ff3_setup_tests`, `ff3_instruction_tests`, and `ff3_instruction_dense_tests`.
-- `cmake -S . -B out/vcs-probe -DPSPRECOMP_PROFILE=vcs` stops during configure:
-
-```text
-CMake Error at profiles/vcs/CMakeLists.txt:71 (message):
-  VCS profile-guided AOT unit is missing:
-  profiles/vcs/generated/generated_unit_0043.cpp
-```
-
-`PSPRECOMP_PROFILE_GUIDED_AOT` defaults to `ON`. On a fresh clone `profiles/vcs/generated/` is absent (it is gitignored translated game code), so the VCS profile cannot be configured on Windows or Linux until that gate changes.
+- The FF3 asset-free command configures, builds, and passes those two tests plus `ff3_bootstrap_tests`, `ff3_tooling_tests`, `ff3_setup_tests`, `ff3_host_tests`, `ff3_instruction_tests`, and `ff3_instruction_dense_tests`.
+- `cmake -S . -B out/vcs-tools -DPSPRECOMP_PROFILE=vcs` configures, builds `vcs_recomp`, and passes `vcs_config_tests`, `audio_resampler_tests`, and `vcs_bootstrap_paths_tests` along with the two framework tests. `VCSNative` is not generated. A partial `generated/` that is missing `generated_unit_0043.cpp` still stops configure, because `PSPRECOMP_PROFILE_GUIDED_AOT` defaults to `ON`.
 
 ### What each host can do
 
@@ -35,7 +29,7 @@ CMake Error at profiles/vcs/CMakeLists.txt:71 (message):
 | `psprecomp_core`, `psp_analyze`, `psp_recomp`, `dump_function`, framework tests | Built in CI | Built in CI with MSVC |
 | FF3 bootstrap, synthetic instruction, tooling, setup, and software host tests | Built in CI | Built in CI with MSVC |
 | FF3 `ff3_probe` and `ff3_player` | `ff3_probe` configures when the local corpus and FFmpeg 7 are present. `FF3_BUILD_WINDOW=ON` stops off macOS | Same. FFmpeg must be built with the compiler that links the probe |
-| `vcs_recomp` and the CPU-only VCS tests | Unreachable: configure dies on the missing hot unit before any target is generated | Same, unless the local corpus is already on disk |
+| `vcs_recomp` and the CPU-only VCS tests | Built in CI without the generated corpus | Built in CI without the generated corpus |
 | `VCSNative` | DirectX 12 sources compile as disabled stubs. `display_window.cpp` and `audio_output.cpp` compile as no-op stubs. The player still cannot link without generated code, and the non-Windows link line requires FFmpeg 7 | Maintained path: Visual Studio 2022, DirectX 12, waveOut, Win32 window, vendored FFmpeg import libraries, local corpus. Scripts live in `profiles/vcs/scripts`. The Ninja recipe is [VCS_NINJA_BUILD.md](VCS_NINJA_BUILD.md) |
 
 `VCSNative` calls `psprecomp::register_generated_functions`, declared in `include/psprecomp/runtime.hpp` and defined by the generated registry. An empty `generated/` directory cannot link the player. The Windows release scripts assume the corpus is already present.
@@ -60,7 +54,7 @@ Off Windows, `initialize_ge_gpu_backend` in `profiles/vcs/host/ge_gpu_backend_dx
 
 ## Phase 1 — Windows joins the asset-free CI
 
-`windows-latest` is in the matrix in `.github/workflows/ci.yml`, limited to `framework` and `ff3`, with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`. The notes below are the acceptance record for that job.
+`windows-latest` is in the matrix in `.github/workflows/ci.yml`. This phase added `framework` and `ff3`, with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`. Phase 2 adds the `vcs` cell. The notes below are the acceptance record for the Windows framework and FF3 job.
 
 Keep the job on the Ninja generator so `CMAKE_BUILD_TYPE=Release` and `ctest` without `-C` mean the same thing they mean on Linux. The GitHub Windows image provides Ninja and the Visual Studio 2022 C++ toolset. The default Visual Studio generator is multi-config: it ignores `CMAKE_BUILD_TYPE` and needs `--config Release` plus `ctest -C Release`. Switching the whole matrix to that generator would make the Linux and macOS steps lie. A Windows-only `-G Ninja` plus the `vcvars` environment is the smaller change.
 
@@ -70,12 +64,12 @@ Use the compiler that the VCS scripts already assume (MSVC from Visual Studio 20
 
 ## Phase 2 — VCS tools configure without the corpus
 
-Change `profiles/vcs/CMakeLists.txt` so a missing corpus skips the player instead of failing configure.
+`profiles/vcs/CMakeLists.txt` skips the player when `generated/*.cpp` is empty. The notes below are the acceptance record.
 
 - When `profiles/vcs/generated/*.cpp` is empty, skip the profile-guided hot-unit override. Keep the fatal for a partial corpus that is missing `generated_unit_0043.cpp`. Skip it when `generated/` contains no translation units.
 - Emit `vcs_recomp` unconditionally. It is the profile generator and links only `psprecomp_core`.
 - Keep building the tests that do not compile the host media stack: `vcs_config_tests`, `audio_resampler_tests`, and `vcs_bootstrap_paths_tests`.
-- Skip `VCSNative`, `vcs_profile_tests`, and the DirectX 12 probes when the corpus is absent. `vcs_profile_tests` compiles the host sources and, off Windows, runs `find_library(... REQUIRED)` for FFmpeg 7 (`libavcodec.so.61`, `libavformat.so.61`, `libavutil.so.59`, `libswresample.so.5`, `libswscale.so.8`). That search must not run during a tools-only configure.
+- Skip `VCSNative` and `vcs_profile_tests` when the corpus is absent. `vcs_profile_tests` compiles the host sources and, off Windows, runs `find_library(... REQUIRED)` for FFmpeg 7 (`libavcodec.so.61`, `libavformat.so.61`, `libavutil.so.59`, `libswresample.so.5`, `libswscale.so.8`). That search must not run during a tools-only configure. The DirectX 12 probes stay Windows-only and do not need the corpus, so a Windows tools build still compiles them.
 - When the corpus is present, preserve today's Windows behavior: hot-unit overrides, the AVX fallback list, `/GL-` on generated units, the 64 MiB stack, and the post-build copy of `VCSNative.ini` and the vendored FFmpeg DLLs.
 
 **Acceptance.** On Linux and Windows, from a tree with no `profiles/vcs/generated/`:

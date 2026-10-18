@@ -17,7 +17,8 @@ Game-specific addresses stay in the profile that measured them. The framework bu
 | FF3 asset-free tooling, software host, and host tests | Continuous integration | Continuous integration, MSVC + Ninja | Continuous integration | No |
 | FF3 headless probe (`ff3_probe`) | Supported when a local corpus and FFmpeg 7 are present | Same, with a matching FFmpeg toolchain | Supported; the interactive player is separate | Yes |
 | FF3 interactive player | No presentation backend | No presentation backend | Experimental Apple Silicon player | Yes |
-| VCS player (`VCSNative`) | Configure stops without the local generated corpus. Window, audio, and DirectX 12 are Windows-only | Maintained DirectX 12 player when the local corpus is present | No player | Yes |
+| VCS tools (`vcs_recomp` and CPU tests) | Continuous integration | Continuous integration, MSVC + Ninja | Continuous integration | No |
+| VCS player (`VCSNative`) | Needs the local corpus. Window, audio, and DirectX 12 are Windows-only | Maintained DirectX 12 player when the local corpus is present | No player | Yes |
 
 The [Windows and Linux build plan](docs/WINDOWS_LINUX_BUILDS.md) is the sequence for closing those gaps. macOS FF3 play stays in the profile docs.
 
@@ -40,9 +41,9 @@ Every build needs CMake 3.20 or newer and a C++20 compiler. The FF3 profile test
 
 | Host | Maintained compiler |
 | --- | --- |
-| Linux | GCC or Clang. Continuous integration uses the `ubuntu-latest` default. GCC 13 passes the framework tests and the FF3 asset-free suite. |
+| Linux | GCC or Clang. Continuous integration uses the `ubuntu-latest` default. GCC 13 passes the framework tests, the FF3 asset-free suite, and the VCS tools tests. |
 | macOS | Apple Clang, as used by `macos-latest` and the FF3 player. |
-| Windows | Visual Studio 2022. Continuous integration uses that compiler with Ninja for the framework and the FF3 host. The Vice City Stories player is still the DirectX 12 build. |
+| Windows | Visual Studio 2022. Continuous integration uses that compiler with Ninja for the framework, the FF3 host, and the VCS tools. The Vice City Stories player is still the DirectX 12 build. |
 
 ## Build the framework
 
@@ -68,11 +69,19 @@ cmake --build out/ff3-tools --parallel 2
 ctest --test-dir out/ff3-tools --output-on-failure
 ```
 
-That suite covers the framework tests plus FF3 bootstrap, synthetic instruction, tooling, and setup tests. It leaves the player unbuilt.
+That suite covers the framework tests plus FF3 bootstrap, synthetic instruction, tooling, setup, and software host tests. It leaves the player unbuilt.
 
 The interactive FF3 player is a macOS application. Opening gameplay through the world map, intro video, audio, keyboard controls, and native save/load have been exercised on Apple Silicon. Full-game compatibility is unverified. Follow the [profile README](profiles/ff3/README.md), [status](profiles/ff3/STATUS.md), and [quickstart](profiles/ff3/QUICKSTART.md). Windows and Linux build the same software host and a headless probe; the commands are in [profiles/ff3/WINDOWS_LINUX.md](profiles/ff3/WINDOWS_LINUX.md). The player and the probe need a locally generated corpus, a prepared font module, and FFmpeg. Use one compiler job for the large generated units when memory is tight.
 
-The Vice City Stories player is the Windows DirectX 12 application `VCSNative`. A fresh clone has no generated corpus, and configuring `-DPSPRECOMP_PROFILE=vcs` currently stops because profile-guided AOT expects `profiles/vcs/generated/generated_unit_0043.cpp`. With that corpus present, use the scripts in `profiles/vcs/scripts` or the [Ninja build notes](docs/VCS_NINJA_BUILD.md). See the [VCS profile README](profiles/vcs/README.md).
+The Vice City Stories tools build without a generated corpus:
+
+```bash
+cmake -S . -B out/vcs-tools -DPSPRECOMP_PROFILE=vcs -DCMAKE_BUILD_TYPE=Release
+cmake --build out/vcs-tools --parallel 2
+ctest --test-dir out/vcs-tools --output-on-failure
+```
+
+That produces `vcs_recomp` and the CPU-only tests. It does not produce `VCSNative`. The player is the Windows DirectX 12 application, and it still needs the local corpus under `profiles/vcs/generated/`. With that corpus present, use the scripts in `profiles/vcs/scripts` or the [Ninja build notes](docs/VCS_NINJA_BUILD.md). See the [VCS profile README](profiles/vcs/README.md).
 
 To add a title, follow [docs/PROFILE_GUIDE.md](docs/PROFILE_GUIDE.md).
 
@@ -88,4 +97,4 @@ The framework is MIT licensed. Profile dependencies keep their notices beside th
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) describes the asset-free checks and what must stay out of Git. Continuous integration on Linux and macOS builds the framework and the FF3 tooling with `FF3_BUILD_GENERATED=OFF`. [docs/REPOSITORY.md](docs/REPOSITORY.md) describes the source-only publication boundary.
+[CONTRIBUTING.md](CONTRIBUTING.md) describes the asset-free checks and what must stay out of Git. Continuous integration on Linux, macOS, and Windows builds the framework, the FF3 tooling with `FF3_BUILD_GENERATED=OFF`, and the VCS tools without a generated corpus. [docs/REPOSITORY.md](docs/REPOSITORY.md) describes the source-only publication boundary.
