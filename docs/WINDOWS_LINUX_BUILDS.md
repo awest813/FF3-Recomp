@@ -4,9 +4,15 @@ This is the working plan for making Windows and Linux first-class build hosts. I
 
 macOS FF3 play is outside this plan. That player already has its own [status](../profiles/ff3/STATUS.md) and [roadmap](../profiles/ff3/NATIVE_ROADMAP.md).
 
+## Progress
+
+The FF3 software host (`ff3_host`) and `ff3_host_tests` are part of the asset-free profile build. Continuous integration runs that build, and the framework build, on Linux, macOS, and Windows. Windows uses the Visual Studio 2022 toolset with Ninja. `ff3_probe` is the headless diagnostic for Windows and Linux once a local corpus and a matching FFmpeg 7 install exist. The commands are in [profiles/ff3/WINDOWS_LINUX.md](../profiles/ff3/WINDOWS_LINUX.md). `FF3_BUILD_WINDOW=ON` still selects the macOS AppKit player and stops configuration on the other hosts.
+
+Still open: the VCS corpus gate (phase 2), a headless Linux `VCSNative` (phase 3), a Linux VCS window (phase 4), and an interactive FF3 window on Windows and Linux (the remainder of phase 5).
+
 ## Current map
 
-Continuous integration (`.github/workflows/ci.yml`) runs on `ubuntu-latest` and `macos-latest`. Each host builds two configurations: the framework (`PSPRECOMP_PROFILE=""`) and FF3 with `FF3_BUILD_GENERATED=OFF`. The workflow is a single-configuration build: it sets `CMAKE_BUILD_TYPE` and runs `ctest` without `-C`.
+Continuous integration (`.github/workflows/ci.yml`) runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Each host builds two configurations: the framework (`PSPRECOMP_PROFILE=""`) and FF3 with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`. Linux and macOS use the platform's default single-configuration generator. Windows uses Ninja after the Visual Studio x64 environment is loaded, so `CMAKE_BUILD_TYPE` means the same thing on every host. `ctest` runs without `-C`.
 
 Checked on Linux with GCC 13.3, from a clean tree:
 
@@ -26,9 +32,9 @@ CMake Error at profiles/vcs/CMakeLists.txt:71 (message):
 
 | Surface | Linux | Windows |
 | --- | --- | --- |
-| `psprecomp_core`, `psp_analyze`, `psp_recomp`, `dump_function`, framework tests | Built in CI | CMake already has MSVC warning, `/MP`, AVX, and LTCG switches. No CI job runs them |
-| FF3 bootstrap, synthetic instruction, tooling, and setup tests | Built in CI | Same sources. No CI job |
-| FF3 `ff3_probe` and `ff3_player` | `FF3_BUILD_WINDOW` refuses to configure off Apple. The headless probe is a separate option and needs the local generated corpus plus FFmpeg | Same |
+| `psprecomp_core`, `psp_analyze`, `psp_recomp`, `dump_function`, framework tests | Built in CI | Built in CI with MSVC |
+| FF3 bootstrap, synthetic instruction, tooling, setup, and software host tests | Built in CI | Built in CI with MSVC |
+| FF3 `ff3_probe` and `ff3_player` | `ff3_probe` configures when the local corpus and FFmpeg 7 are present. `FF3_BUILD_WINDOW=ON` stops off macOS | Same. FFmpeg must be built with the compiler that links the probe |
 | `vcs_recomp` and the CPU-only VCS tests | Unreachable: configure dies on the missing hot unit before any target is generated | Same, unless the local corpus is already on disk |
 | `VCSNative` | DirectX 12 sources compile as disabled stubs. `display_window.cpp` and `audio_output.cpp` compile as no-op stubs. The player still cannot link without generated code, and the non-Windows link line requires FFmpeg 7 | Maintained path: Visual Studio 2022, DirectX 12, waveOut, Win32 window, vendored FFmpeg import libraries, local corpus. Scripts live in `profiles/vcs/scripts`. The Ninja recipe is [VCS_NINJA_BUILD.md](VCS_NINJA_BUILD.md) |
 
@@ -54,15 +60,13 @@ Off Windows, `initialize_ge_gpu_backend` in `profiles/vcs/host/ge_gpu_backend_dx
 
 ## Phase 1 — Windows joins the asset-free CI
 
-Add `windows-latest` to the existing matrix in `.github/workflows/ci.yml`, still limited to `framework` and `ff3`, with `FF3_BUILD_GENERATED=OFF`.
+`windows-latest` is in the matrix in `.github/workflows/ci.yml`, limited to `framework` and `ff3`, with `FF3_BUILD_GENERATED=OFF` and `FF3_BUILD_WINDOW=OFF`. The notes below are the acceptance record for that job.
 
 Keep the job on the Ninja generator so `CMAKE_BUILD_TYPE=Release` and `ctest` without `-C` mean the same thing they mean on Linux. The GitHub Windows image provides Ninja and the Visual Studio 2022 C++ toolset. The default Visual Studio generator is multi-config: it ignores `CMAKE_BUILD_TYPE` and needs `--config Release` plus `ctest -C Release`. Switching the whole matrix to that generator would make the Linux and macOS steps lie. A Windows-only `-G Ninja` plus the `vcvars` environment is the smaller change.
 
 Use the compiler that the VCS scripts already assume (MSVC from Visual Studio 2022), so the first Windows job exercises `/W4`, `/permissive-`, `/EHsc`, and `/MP` in the root `CMakeLists.txt`.
 
-**Acceptance.** The four existing Linux and macOS cells stay green. The two new Windows cells pass the same tests: two framework tests, and seven tests for the FF3 asset-free configuration. The job still runs `python3 tools/check_repository.py`. No game files, no FFmpeg, no generated corpus.
-
-After this lands, update the host table in the README and the CI sentence in [REPOSITORY.md](REPOSITORY.md).
+**Acceptance.** Linux, macOS, and Windows pass the same asset-free tests: two framework tests, and eight FF3 tests once `ff3_host_tests` is included. The job still runs `tools/check_repository.py`. No game files, no FFmpeg, no generated corpus. The README host table and [REPOSITORY.md](REPOSITORY.md) describe this job.
 
 ## Phase 2 — VCS tools configure without the corpus
 
@@ -116,7 +120,7 @@ Present the software framebuffer. Leave DirectX 12 as the Windows GPU path. A Li
 
 Two different builds, in this order.
 
-**Headless probe.** `ff3_probe` is already behind `FF3_BUILD_GENERATED` and is not inside the Apple check. Document the Windows and Linux configure line next to the macOS player instructions: generated corpus, font module if `FF3_BUILD_FONT` is on, and FFmpeg from `FF3_FFMPEG_ROOT` (the FF3 default is `out/media/install`). Keep `FF3_BUILD_WINDOW` off. This build can be checked locally. Public CI continues to pass `-DFF3_BUILD_GENERATED=OFF`.
+**Headless probe.** `ff3_host` compiles in the asset-free CI build. `ff3_probe` is behind `FF3_BUILD_GENERATED` and links that host plus FFmpeg media code. The Windows and Linux configure line, including the font module and `FF3_FFMPEG_ROOT`, is [profiles/ff3/WINDOWS_LINUX.md](../profiles/ff3/WINDOWS_LINUX.md). `FF3_BUILD_WINDOW` stays off. Public CI continues to pass `-DFF3_BUILD_GENERATED=OFF`. A MinGW FFmpeg tree is refused when the probe compiler is MSVC.
 
 **Interactive window.** `profiles/ff3/CMakeLists.txt` enables `FF3_BUILD_WINDOW` by default on Apple and fatals elsewhere. `src/native_window.mm` and `src/native_audio.cpp` are AppKit and AudioToolbox. A Windows or Linux window is a new presentation backend beside that pair, selected by the host, still compiling the shared software renderer from `profiles/vcs/host/ge_renderer.cpp`.
 

@@ -12,9 +12,10 @@ paths. In particular, `profiles/vcs/generated/` is local, just like FF3's
 `profiles/ff3/analysis/generated/`. A fresh clone needs local generation before
 building a game player. The VCS player also requires its Windows dependencies.
 
-CI on Linux and macOS builds the framework and FF3 asset-free tooling/tests.
-It does not build the commercial-game corpus or claim gameplay validation.
-Windows CI and a corpus-free VCS tools build are sequenced in
+CI on Linux, macOS, and Windows builds the framework and FF3 asset-free
+tooling, software host, and host tests. It does not build the commercial-game
+corpus or claim gameplay validation. The headless FF3 probe and the remaining
+VCS host work are sequenced in
 [the Windows and Linux build plan](WINDOWS_LINUX_BUILDS.md).
 FF3 player preparation is documented in [the profile README](../profiles/ff3/README.md).
 

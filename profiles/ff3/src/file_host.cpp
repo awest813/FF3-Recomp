@@ -1,4 +1,5 @@
 #include "file_host.hpp"
+#include "host_system.hpp"
 #include "psprecomp/common.hpp"
 #include <algorithm>
 #include <iostream>
@@ -77,14 +78,14 @@ void FileHost::install(psprecomp::Runtime &runtime){
             if(write || std::sscanf(name.c_str(),"disc0:/sce_lbn0x%llx_size0x%llx%n",&sector,&length,&consumed)!=2 || consumed!=name.size() || !std::filesystem::exists(iso_) || sector>UINT64_MAX/2048){rt.stop("Invalid raw sector path or missing disc.iso");return;}
             const auto base=static_cast<std::uint64_t>(sector)*2048;const auto iso_size=std::filesystem::file_size(iso_);
             if(base>iso_size || length>iso_size-base){rt.stop("Raw sector read outside ISO");return;}
-            auto stream=std::fopen(iso_.string().c_str(),"rb");if(!stream || ::fseeko(stream,base,SEEK_SET)){if(stream)std::fclose(stream);rt.stop("Cannot open raw ISO sectors");return;}
+            auto stream=open_file(iso_,"rb");if(!stream || seek_file(stream,static_cast<std::int64_t>(base),SEEK_SET)){if(stream)std::fclose(stream);rt.stop("Cannot open raw ISO sectors");return;}
             const auto fd=next_fd_++;files_.emplace(fd,File{stream,static_cast<std::int64_t>(fd),base,length});ctx.set_gpr(2,fd);std::cout<<"[io] open "<<name<<" ok (ISO sectors)\n";return;
         }
         const auto file=path(name,write);
         const char *mode=write?((flags&0x400)?"wb+":(flags&0x100)?"ab+":"rb+"):"rb";
         if(write&&(flags&0x200))std::filesystem::create_directories(file.parent_path());
-        auto stream=std::fopen(file.string().c_str(),mode);
-        if(!stream&&write&&(flags&0x200))stream=std::fopen(file.string().c_str(),"wb+");
+        auto stream=open_file(file,mode);
+        if(!stream&&write&&(flags&0x200))stream=open_file(file,"wb+");
         std::cout<<"[io] open "<<name<<(stream?" ok":" missing")<<'\n';
         if(!stream){ctx.set_gpr(2,0x80010002u);return;}
         const auto fd=next_fd_++;files_.emplace(fd,File{stream,static_cast<std::int64_t>(fd),0,std::filesystem::file_size(file)});ctx.set_gpr(2,fd);(void)async;
@@ -95,7 +96,7 @@ void FileHost::install(psprecomp::Runtime &runtime){
         const auto it=files_.find(ctx.gpr[4]);const auto out=ctx.gpr[5],count=ctx.gpr[6];
         if(it==files_.end()||!it->second.stream){ctx.set_gpr(2,0x80010009u);return;}
         if(!rt.memory().contains(out,count)){rt.stop("Invalid file read buffer");return;}
-        std::vector<std::uint8_t> data(count);const auto &file=it->second;const auto pos=static_cast<std::uint64_t>(::ftello(file.stream))-file.base;const auto available=pos>=file.length?0:file.length-pos;const auto n=std::fread(data.data(),1,std::min<std::uint64_t>(count,available),file.stream);data.resize(n);rt.memory().copy_in(out,data);
+        std::vector<std::uint8_t> data(count);const auto &file=it->second;const auto pos=static_cast<std::uint64_t>(tell_file(file.stream))-file.base;const auto available=pos>=file.length?0:file.length-pos;const auto n=std::fread(data.data(),1,std::min<std::uint64_t>(count,available),file.stream);data.resize(n);rt.memory().copy_in(out,data);
         const auto result=std::ferror(it->second.stream)?static_cast<std::int32_t>(0x80010005u):static_cast<std::int64_t>(n);
         it->second.result=result;ctx.set_gpr(2,async?0:static_cast<std::uint32_t>(result));
     };
@@ -108,9 +109,9 @@ void FileHost::install(psprecomp::Runtime &runtime){
         const auto it=files_.find(ctx.gpr[4]);if(it==files_.end()||!it->second.stream){ctx.set_gpr(2,0x80010009u);return;}
         const auto offset=wide?static_cast<std::int64_t>((static_cast<std::uint64_t>(ctx.gpr[7])<<32)|ctx.gpr[6]):static_cast<std::int32_t>(ctx.gpr[5]);
         const auto whence=wide?ctx.gpr[8]:ctx.gpr[6];
-        auto &file=it->second;const auto origin=whence==0?0:whence==1?static_cast<std::int64_t>(::ftello(file.stream)-file.base):static_cast<std::int64_t>(file.length);
+        auto &file=it->second;const auto origin=whence==0?0:whence==1?static_cast<std::int64_t>(tell_file(file.stream))-static_cast<std::int64_t>(file.base):static_cast<std::int64_t>(file.length);
         const auto position=origin+offset;
-        const auto result=(whence>2 || position<0 || ::fseeko(file.stream,file.base+position,SEEK_SET))?static_cast<std::int64_t>(static_cast<std::int32_t>(0x80010016u)):position;
+        const auto result=(whence>2 || position<0 || seek_file(file.stream,static_cast<std::int64_t>(file.base)+position,SEEK_SET))?static_cast<std::int64_t>(static_cast<std::int32_t>(0x80010016u)):position;
         it->second.result=result;ctx.set_gpr(2,async?0:static_cast<std::uint32_t>(result));if(wide&&!async)ctx.set_gpr(3,static_cast<std::uint32_t>(static_cast<std::uint64_t>(result)>>32));
     };
     runtime.register_hle("IoFileMgrForUser",0x27EB27B8u,[seek](auto &r,auto &c){seek(r,c,false,true);});

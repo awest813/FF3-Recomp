@@ -4,10 +4,12 @@ Keep reusable Allegrex/runtime changes in the framework and title-specific
 behavior in the relevant profile. Preserve existing license and attribution
 notices; see [source provenance](docs/SOURCE_PROVENANCE.md).
 
-The asset-free check below is what Linux and macOS continuous integration runs.
-Windows coverage and a VCS tools build that configures without the local
-generated corpus are sequenced in
+The asset-free check below matches continuous integration on Linux, macOS, and
+Windows. It includes the FF3 software host tests. A VCS tools build that
+configures without the local generated corpus is still sequenced in
 [the Windows and Linux build plan](docs/WINDOWS_LINUX_BUILDS.md).
+Windows and Linux FF3 probe instructions are in
+[profiles/ff3/WINDOWS_LINUX.md](profiles/ff3/WINDOWS_LINUX.md).
 
 Build and test changes without commercial inputs first:
 

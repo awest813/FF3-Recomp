@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Prepare and build the supported FF3 macOS player from local dumps and an ISO."""
+"""Prepare local FF3 inputs and build the native host.
+
+macOS builds the interactive player. Linux and Windows build the headless probe.
+"""
 import argparse
 import hashlib
 import json
@@ -87,10 +90,19 @@ def prepare_inputs(elf, font, iso, game):
     print('Prepared matching game, font, extracted disc and raw ISO access.', flush=True)
 
 
-def relocator(output):
+def host_compiler():
+    if platform.system() == 'Darwin':
+        return tool('clang++')
+    for name in ('g++', 'clang++', 'c++'):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise ValueError('Missing a C++ compiler. See profiles/ff3/WINDOWS_LINUX.md.')
+
+
+def relocator(output, compiler):
     source = output / 'prxtool'
     git = tool('git')
-    compiler = tool('clang++')
     if not source.exists():
         run([git, 'clone', '--no-checkout', 'https://github.com/pspdev/prxtool.git', source])
         run([git, 'checkout', '--detach', PRXTOOL_REVISION], cwd=source)
@@ -99,7 +111,12 @@ def relocator(output):
         raise ValueError('Unexpected PRXTool revision at ' + str(source))
     binary = output / 'dump_relocations'
     files = ['ProcessElf.C', 'ProcessPrx.C', 'NidMgr.C', 'VirtualMem.C', 'output.C', 'disasm.C', 'pspkerror.C']
-    run([compiler, '-std=c++11', '-Wno-deprecated', '-Wno-writable-strings', '-I.', '-iquote', 'tinyxml',
+    warnings = ['-Wno-deprecated']
+    if 'clang' in Path(compiler).name.lower():
+        warnings.append('-Wno-writable-strings')
+    else:
+        warnings.append('-Wno-write-strings')
+    run([compiler, '-std=c++11', *warnings, '-I.', '-iquote', 'tinyxml',
          PROFILE / 'tools/prxtool_dump_relocations.cpp', *files,
          *sorted(Path('tinyxml').joinpath(p.name) for p in (source / 'tinyxml').glob('*.cpp')),
          '-o', binary], cwd=source)
@@ -116,20 +133,27 @@ def main(argv=None):
     parser.add_argument('--relocator', type=Path, help='Existing dump_relocations helper; otherwise build pinned external PRXTool')
     args = parser.parse_args(argv)
     try:
-        if not args.prepare_only and platform.system() != 'Darwin':
-            raise ValueError('The interactive player currently requires macOS. Asset-free tooling remains cross-platform.')
+        window = platform.system() == 'Darwin'
         cmake = None
+        compiler = None
         if not args.prepare_only:
             cmake = tool(args.cmake)
-            for name in ('clang++', 'make', 'git'):
-                tool(name)
+            tool('git')
+            tool('make')
+            compiler = host_compiler()
+            if platform.system() == 'Windows':
+                for name in ('bash', 'ninja'):
+                    tool(name)
         prepare_inputs(args.elf.resolve(), args.font.resolve(), args.iso.resolve(), PROFILE / 'game')
         if args.prepare_only:
             return 0
         build = ROOT / 'out/ff3'
         config = PROFILE / 'config/npuh10125.json'
-        run([cmake, '-S', ROOT, '-B', build, '-DPSPRECOMP_PROFILE=ff3', '-DCMAKE_BUILD_TYPE=Release',
-             '-DFF3_CONFIG=' + str(config), '-DFF3_BUILD_GENERATED=OFF',
+        configure = [cmake, '-S', ROOT, '-B', build, '-DPSPRECOMP_PROFILE=ff3', '-DCMAKE_BUILD_TYPE=Release']
+        if platform.system() == 'Windows':
+            configure.extend(['-G', 'Ninja', '-DCMAKE_CXX_COMPILER=' + compiler, '-DCMAKE_C_COMPILER=' + compiler.replace('g++', 'gcc').replace('clang++', 'clang')])
+        run([*configure,
+             '-DFF3_CONFIG=' + str(config), '-DFF3_BUILD_GENERATED=OFF', '-DFF3_BUILD_WINDOW=OFF',
              '-DFF3_ELF=' + str(PROFILE / 'game/EBOOT.ELF'),
              '-DFF3_ANALYSIS_DIR=' + str(PROFILE / 'analysis'),
              '-DPSPRECOMP_BUILD_TESTS=ON', '-DPSPRECOMP_BUILD_PROFILE_TESTS=ON'])
@@ -137,19 +161,28 @@ def main(argv=None):
         run([cmake, '--build', build, '--target', 'ff3_generate', '--parallel', '1'])
         dependency = ROOT / 'out/ff3-setup'
         dependency.mkdir(parents=True, exist_ok=True)
-        helper = args.relocator.resolve() if args.relocator else relocator(dependency)
+        helper = args.relocator.resolve() if args.relocator else relocator(dependency, compiler)
         prepare_font(PROFILE / 'game/libfont.elf', helper, build / 'psp_recomp',
                      PROFILE / 'game/libfont.fixed.elf', PROFILE / 'analysis/font_generated')
         run([sys.executable, PROFILE / 'tools/build_media.py', ROOT / 'out/media'])
-        run([cmake, '-S', ROOT, '-B', build, '-DPSPRECOMP_PROFILE=ff3',
-             '-DFF3_CONFIG=' + str(config), '-DFF3_BUILD_GENERATED=ON', '-DFF3_BUILD_FONT=ON',
-             '-DFF3_BUILD_WINDOW=ON', '-DPSPRECOMP_GENERATED_OPT_LEVEL=0',
+        run([*configure, '-DFF3_CONFIG=' + str(config), '-DFF3_BUILD_GENERATED=ON', '-DFF3_BUILD_FONT=ON',
+             '-DFF3_BUILD_WINDOW=' + ('ON' if window else 'OFF'), '-DPSPRECOMP_GENERATED_OPT_LEVEL=0',
              '-DFF3_FFMPEG_ROOT=' + str(ROOT / 'out/media/install')])
         run([cmake, '--build', build, '--parallel', '1'])
         ctest = Path(cmake).resolve().with_name('ctest')
         run([ctest, '--test-dir', build, '--output-on-failure'])
-        run([sys.executable, PROFILE / 'tools/play.py', '--check'])
-        print('\nReady. Launch with: python3 profiles/ff3/tools/play.py')
+        if window:
+            run([sys.executable, PROFILE / 'tools/play.py', '--check'])
+            print('\nReady. Launch with: python3 profiles/ff3/tools/play.py')
+        else:
+            from preflight import check_runtime
+            probe = build / 'profiles/ff3' / ('ff3_probe.exe' if platform.system() == 'Windows' else 'ff3_probe')
+            errors = check_runtime(PROFILE / 'game/EBOOT.ELF', PROFILE / 'game/disc.iso', probe)
+            if errors:
+                raise ValueError('FF3 is not ready:\n- ' + '\n- '.join(errors))
+            print('\nHeadless probe ready: ' + str(probe))
+            print('Launch a bounded diagnostic with:')
+            print('  ' + str(probe) + ' ' + str(PROFILE / 'game/EBOOT.ELF') + ' 64 bootstrap')
         return 0
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         print('FF3 setup: ' + str(error), file=sys.stderr)

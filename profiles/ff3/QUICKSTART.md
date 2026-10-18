@@ -3,8 +3,9 @@
 This is an experimental native recompilation of **Final Fantasy III PSP,
 NPUH10125 v1.00**. Opening gameplay through the world map, audio/video and native
 save/load have been tested on Apple Silicon macOS. Full-game compatibility and
-Intel Mac playback are not verified. Windows/Linux can build the asset-free
-tooling, but do not currently have an interactive FF3 window.
+Intel Mac playback are not verified. Windows and Linux build the asset-free
+tooling, the software host, and a headless probe. The interactive window
+remains macOS. See [Windows and Linux builds](WINDOWS_LINUX.md).
 
 An ISO alone is **not enough**: you also need an already decrypted EBOOT dump and
 an already decrypted libfont PRX dump from the supported release. This project

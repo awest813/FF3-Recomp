@@ -10,6 +10,7 @@
 #include "utility_host.hpp"
 #include "movie_host.hpp"
 #include "savedata_host.hpp"
+#include "host_system.hpp"
 #ifdef FF3_NATIVE_WINDOW
 #include "native_window.hpp"
 #endif
@@ -34,7 +35,7 @@ int main(int argc, char **argv) {
         char *player_args[]{app_name,default_elf,play_mode,nullptr};
         if (argc==1) { argc=3; argv=player_args; }
         // GUI launches do not inherit the diagnostic driver's chaining setting.
-        setenv("PSPRECOMP_NO_CHAIN","1",1);
+        ff3::set_environment("PSPRECOMP_NO_CHAIN","1");
 #endif
         if (argc < 2 || argc > 4) throw Error("Usage: ff3_probe <EBOOT.ELF> [max_dispatches=64|--play] [bootstrap|none]");
         const bool interactive=argc>=3 && std::string_view(argv[2])=="--play";
@@ -62,14 +63,14 @@ int main(int argc, char **argv) {
 #ifdef FF3_NATIVE_WINDOW
         std::unique_ptr<ff3::NativeWindow> window;
         if (interactive) {
-            setenv("PSPRECOMP_NO_CHAIN","1",1);
+            ff3::set_environment("PSPRECOMP_NO_CHAIN","1");
             const auto autoplay=std::getenv("FF3_AUTOPLAY_UNTIL_MS");
             const auto autoplay_until=autoplay?std::stoull(autoplay)*1000:0;
             window=std::make_unique<ff3::NativeWindow>(autoplay_until);
             display.set_capture_enabled(std::getenv("FF3_FRAME_DIR")!=nullptr);
             display.set_presenter([&,autoplay_until,autoplay_active=autoplay_until!=0](auto &runtime,auto rgb) mutable {
                 if (autoplay_active && hle.virtual_time()>=autoplay_until) {
-                    unsetenv("FF3_DIALOG_RESPONSE");
+                    ff3::unset_environment("FF3_DIALOG_RESPONSE");
                     autoplay_active=false;
                 }
                 if (!window->present(rgb,hle.virtual_time())) runtime.stop("Native window closed");

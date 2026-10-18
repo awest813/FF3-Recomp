@@ -29,14 +29,21 @@ def build(root):
     # Apple Silicon uses the compiler's assembler. Intel hosts without NASM
     # can still build the portable C implementation.
     assembler=[] if platform.machine().lower() not in ('x86_64','amd64') or shutil.which('nasm') else ['--disable-x86asm']
-    subprocess.run(['./configure','--prefix='+str(root/'install'),*assembler,
+    configure=['./configure','--prefix='+str(root/'install'),*assembler,
         '--disable-everything','--disable-programs','--disable-doc','--disable-debug',
         '--disable-autodetect','--disable-avdevice','--disable-avfilter',
         '--disable-static','--enable-shared','--enable-small',
         '--enable-decoder=atrac3,atrac3p,h264,aac,pcm_s16le',
         '--enable-demuxer=wav,mpegps,h264','--enable-parser=h264,aac',
-        '--enable-protocol=file','--enable-swresample','--enable-swscale'],cwd=source,check=True)
-    subprocess.run(['make','-j1'],cwd=source,check=True)
-    subprocess.run(['make','install'],cwd=source,check=True)
+        '--enable-protocol=file','--enable-swresample','--enable-swscale']
+    if platform.system()=='Windows':
+        bash=shutil.which('bash')
+        if not bash:raise ValueError('Building FFmpeg on Windows needs bash. See profiles/ff3/WINDOWS_LINUX.md')
+        configure=[bash,*configure]
+    make=shutil.which('make') or shutil.which('mingw32-make')
+    if not make:raise ValueError('Building FFmpeg needs GNU make. See profiles/ff3/WINDOWS_LINUX.md')
+    subprocess.run(configure,cwd=source,check=True)
+    subprocess.run([make,'-j1'],cwd=source,check=True)
+    subprocess.run([make,'install'],cwd=source,check=True)
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('output',type=Path);build(p.parse_args().output)

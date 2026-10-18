@@ -9,7 +9,8 @@ decoding and the HLE services used by this opening sequence. See
 [native menu setup](native-menu.md) for disc/font preparation and dependencies,
 and [the gameplay checkpoint](native-gameplay.md) for a reproducible scripted run.
 On macOS, [interactive native play](native-play.md) adds a live window and keyboard
-controls. Progress through the opening cave into the world map and native
+controls. Windows and Linux build the headless probe instead; see
+[WINDOWS_LINUX.md](WINDOWS_LINUX.md). Progress through the opening cave into the world map and native
 [save/load across a restart](native-savedata.md) are verified. Full-game
 compatibility is unverified.
 See the [native architecture audit and roadmap](NATIVE_ROADMAP.md) for current

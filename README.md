@@ -13,8 +13,9 @@ Game-specific addresses stay in the profile that measured them. The framework bu
 
 | Build | Linux | Windows | macOS | Local game files |
 | --- | --- | --- | --- | --- |
-| Framework library, tools, and tests | Continuous integration | MSVC flags are in the CMake files; continuous integration does not run this host yet | Continuous integration | No |
-| FF3 asset-free tooling and tests | Continuous integration | Same gap as the framework | Continuous integration | No |
+| Framework library, tools, and tests | Continuous integration | Continuous integration, MSVC + Ninja | Continuous integration | No |
+| FF3 asset-free tooling, software host, and host tests | Continuous integration | Continuous integration, MSVC + Ninja | Continuous integration | No |
+| FF3 headless probe (`ff3_probe`) | Supported when a local corpus and FFmpeg 7 are present | Same, with a matching FFmpeg toolchain | Supported; the interactive player is separate | Yes |
 | FF3 interactive player | No presentation backend | No presentation backend | Experimental Apple Silicon player | Yes |
 | VCS player (`VCSNative`) | Configure stops without the local generated corpus. Window, audio, and DirectX 12 are Windows-only | Maintained DirectX 12 player when the local corpus is present | No player | Yes |
 
@@ -41,7 +42,7 @@ Every build needs CMake 3.20 or newer and a C++20 compiler. The FF3 profile test
 | --- | --- |
 | Linux | GCC or Clang. Continuous integration uses the `ubuntu-latest` default. GCC 13 passes the framework tests and the FF3 asset-free suite. |
 | macOS | Apple Clang, as used by `macos-latest` and the FF3 player. |
-| Windows | Visual Studio 2022 for the Vice City Stories DirectX 12 player. The framework CMake already passes MSVC flags; that configuration is not in continuous integration yet. |
+| Windows | Visual Studio 2022. Continuous integration uses that compiler with Ninja for the framework and the FF3 host. The Vice City Stories player is still the DirectX 12 build. |
 
 ## Build the framework
 
@@ -69,7 +70,7 @@ ctest --test-dir out/ff3-tools --output-on-failure
 
 That suite covers the framework tests plus FF3 bootstrap, synthetic instruction, tooling, and setup tests. It leaves the player unbuilt.
 
-The interactive FF3 player is a macOS application today. Opening gameplay through the world map, intro video, audio, keyboard controls, and native save/load have been exercised on Apple Silicon. Full-game compatibility is unverified. Follow the [profile README](profiles/ff3/README.md), [status](profiles/ff3/STATUS.md), and [quickstart](profiles/ff3/QUICKSTART.md). The player also needs a locally generated corpus, a prepared font module, and FFmpeg. Use one compiler job for the large generated units when memory is tight.
+The interactive FF3 player is a macOS application. Opening gameplay through the world map, intro video, audio, keyboard controls, and native save/load have been exercised on Apple Silicon. Full-game compatibility is unverified. Follow the [profile README](profiles/ff3/README.md), [status](profiles/ff3/STATUS.md), and [quickstart](profiles/ff3/QUICKSTART.md). Windows and Linux build the same software host and a headless probe; the commands are in [profiles/ff3/WINDOWS_LINUX.md](profiles/ff3/WINDOWS_LINUX.md). The player and the probe need a locally generated corpus, a prepared font module, and FFmpeg. Use one compiler job for the large generated units when memory is tight.
 
 The Vice City Stories player is the Windows DirectX 12 application `VCSNative`. A fresh clone has no generated corpus, and configuring `-DPSPRECOMP_PROFILE=vcs` currently stops because profile-guided AOT expects `profiles/vcs/generated/generated_unit_0043.cpp`. With that corpus present, use the scripts in `profiles/vcs/scripts` or the [Ninja build notes](docs/VCS_NINJA_BUILD.md). See the [VCS profile README](profiles/vcs/README.md).
 
